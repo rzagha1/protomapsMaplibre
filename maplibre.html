@@ -38,8 +38,8 @@
     const map = new maplibregl.Map({
         container: "map", // the id of the div element
         style: `https://basemaps-api.arcgis.com/arcgis/rest/services/styles/${basemapEnum}?type=style&token=${apiKey}`,
-        zoom: 9, // starting zoom
-        center: [-74.6,40.3], // starting location [longitude, latitude]
+        zoom: 6, // starting zoom
+        center: [-90,40.3], // starting location [longitude, latitude]
         attributionControl: false,
         hash: true
     });
