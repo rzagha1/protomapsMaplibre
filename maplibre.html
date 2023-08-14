@@ -34,6 +34,7 @@
     <button id="toggleBtn" class="toggle-btn">Toggle USPTS</button>
     
     <script>
+    let boundingBoxSource;
     let protocol = new pmtiles.Protocol();
     maplibregl.setRTLTextPlugin('https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.2.3/mapbox-gl-rtl-text.js');
     maplibregl.addProtocol("pmtiles", protocol.tile);
@@ -46,7 +47,7 @@
     const map = new maplibregl.Map({
         container: "map", // the id of the div element
         style: `https://basemaps-api.arcgis.com/arcgis/rest/services/styles/${basemapEnum}?type=style&token=${apiKey}`,
-        zoom: 6, // starting zoom
+        zoom: 4, // starting zoom
         center: [-90,40.3], // starting location [longitude, latitude]
         attributionControl: false,
         hash: true
@@ -66,22 +67,87 @@
         collapsed: true
       });
     map.addControl(
-    geocoder
+        geocoder
     );
     geocoder.on('result', function(ev) {
-    coords = ev.result.geometry.coordinates;
-    if (geocodeMarker) {
-        geocodeMarker.remove();
-    }
-    geocodeMarker = new maplibregl.Marker({
-        color: "#FFFFFF",
-        draggable: true
-        }).setLngLat(coords)
-        .addTo(map);
+        coords = ev.result.geometry.coordinates;
+        if (geocodeMarker) {
+            geocodeMarker.remove();
+        }
+        geocodeMarker = new maplibregl.Marker({
+            color: "#FFFFFF",
+            draggable: true
+            }).setLngLat(coords)
+            .addTo(map);
     });
-    map.addControl(new maplibregl.NavigationControl());            
+    map.addControl(new maplibregl.NavigationControl());      
+
+    const layer ={
+            LYR: 'public.hexagons',
+            ID: 'hexagons',
+            REF: 'hex_source',
+            COLOR: 'orange',
+            GEOM: 'Polygon',
+            MIN_ZOOM: 1,
+            QUERY: '?step=4'
+        } 
   
     map.on('load', () => {
+        const tilesUrl = layer.QUERY ? `http://164.90.213.82:7800/${layer.LYR}/{z}/{x}/{y}.pbf${layer.QUERY}` : `http://164.90.213.82:7800/${layer.LYR}/{z}/{x}/{y}.pbf`;
+        map.addSource(layer.REF, {
+            type: 'vector',
+            tiles: [tilesUrl],
+            minzoom: layer.MIN_ZOOM,
+            maxzoom: 22,
+            promoteId: 'id'
+        });
+        map.addLayer({
+            id: layer.ID + 'line',
+            source: layer.REF,
+            'source-layer': layer.LYR,
+            type: 'line',
+            paint: {
+            'line-color': layer.COLOR,
+            'line-width': 1
+            }
+        });
+        map.addLayer({
+            id: layer.ID,
+            source: layer.REF,
+            'source-layer': layer.LYR,
+            type: 'fill',
+            layout: {
+            visibility: 'visible'
+            },
+            paint: {
+            'fill-color': layer.COLOR,
+            'fill-opacity': [
+                'case',
+                ['boolean', ['feature-state', 'hover'], false],
+                1,
+                0.5
+            ]
+            }
+        });
+
+        map.addSource("counties", {
+                type: "vector",
+                tiles: [
+                "https://vectortileservices5.arcgis.com/x3kecEMtcyrJgEOz/arcgis/rest/services/counties_vt_test/VectorTileServer/tile/{z}/{y}/{x}.pbf"
+                ]
+        });
+            
+        map.addLayer({
+                id: "counties-fill",
+                type: "fill",
+                source: "counties",
+                "source-layer": "ne_10m_admin_0_countries_usa",
+                paint: {
+                "fill-color": "hsl(200, 80%, 50%)",
+                "fill-opacity": 0.5,
+                "fill-outline-color": "white"
+                }
+        });
         map.addSource('uspts', {
             type: 'vector',
             url: "pmtiles://" + PMTILES_URL
@@ -111,65 +177,111 @@
                         14, 2
                     ],
                 }
-            });
-            
-            map.addSource("parcels", {
-        type: "vector",
-        tiles: [
-          "https://vectortileservices5.arcgis.com/x3kecEMtcyrJgEOz/arcgis/rest/services/counties_vt_test/VectorTileServer/tile/{z}/{y}/{x}.pbf"
-        ]
-      });
-	  
-	       map.addLayer({
-        id: "parcels-fill",
-        type: "fill",
-        source: "parcels",
-        "source-layer": "ne_10m_admin_0_countries_usa",
-        paint: {
-          "fill-color": "hsl(200, 80%, 50%)",
-          "fill-opacity": 0.5,
-          "fill-outline-color": "white"
-        }
-      });
+            });         
+        });
 
- 
+        const popup = new maplibregl.Popup({
+            closeButton: true,
+            closeOnClick: false,
+            maxWidth: "none",
+        });
+        map.on('click', 'pts', (e) => {            
+                const feature = e.features[0];
+                popup.setHTML(`<table style="font-size:12px">
+                        <tr><td>${feature.properties.prop}</td></tr></table>`);
+                popup.setLngLat(e.lngLat);
+                popup.addTo(map);
+        });        
 
+        map.on('click', 'hexagons', (e) => {
+                const feature = e.features[0];
+                popup.setHTML(`<table style="font-size:12px">
+                        <tr><td>${feature.properties.pts}</td></tr></table>`);
+                popup.setLngLat(e.lngLat);
+                popup.addTo(map);
+        });   
 
+        const toggleButton = document.getElementById('toggleBtn');
+        toggleButton.addEventListener('click', toggleUSPTS);
 
+        function toggleUSPTS() {
+            const layerId = 'pts';
+            const layer = map.getLayer(layerId);
 
-
-    });
-    const popup = new maplibregl.Popup({
-        closeButton: true,
-        closeOnClick: false,
-        maxWidth: "none",
-    });
-
-    map.on('click', 'pts', (e) => {
-            const feature = e.features[0];
-            popup.setHTML(`<table style="font-size:12px">
-                    <tr><td>${feature.properties.prop}</td></tr></table>`);
-            popup.setLngLat(e.lngLat);
-            popup.addTo(map);
-
-    });        
-
-                const toggleButton = document.getElementById('toggleBtn');
-            toggleButton.addEventListener('click', toggleUSPTS);
-
-            function toggleUSPTS() {
-                const layerId = 'pts';
-                const layer = map.getLayer(layerId);
-
-                if (layer) {
-                    const visibility = map.getLayoutProperty(layerId, 'visibility');
-                    if (visibility === 'visible') {
-                        map.setLayoutProperty(layerId, 'visibility', 'none');
-                    } else {
-                        map.setLayoutProperty(layerId, 'visibility', 'visible');
-                    }
+            if (layer) {
+                const visibility = map.getLayoutProperty(layerId, 'visibility');
+                if (visibility === 'visible') {
+                    map.setLayoutProperty(layerId, 'visibility', 'none');
+                } else {
+                    map.setLayoutProperty(layerId, 'visibility', 'visible');
                 }
             }
+        }
+
+        function updateBoundingBoxPolygon() {
+            const bounds = map.getBounds();
+            const polygonCoordinates = [
+                [bounds.getWest(), bounds.getNorth()],
+                [bounds.getEast(), bounds.getNorth()],
+                [bounds.getEast(), bounds.getSouth()],
+                [bounds.getWest(), bounds.getSouth()],
+                [bounds.getWest(), bounds.getNorth()] 
+            ];
+            const features = map.queryRenderedFeatures(polygonCoordinates, { layers: ['pts'] });
+            const numFeatures = features.length;
+            map.addSource('bounding-box', {
+                type: 'geojson',
+                data: {
+                type: 'Feature',
+                geometry: {
+                    type: 'Polygon',
+                    coordinates: [polygonCoordinates]
+                }
+                }
+            });
+            map.addLayer({
+                id: 'bounding-box-layer',
+                type: 'fill',
+                source: 'bounding-box',
+                paint: {
+                'fill-color': 'yellow',
+                "fill-opacity": 0.2,
+                'fill-outline-color': 'rgba(0, 0, 0, 0.5)'
+                }
+            });
+            queryPointsWithinBoundingBox(polygonCoordinates);
+        }
+
+        function queryPointsWithinBoundingBox(polygonCoordinates) {
+            const polygonGeoJSON = {
+                type: 'Polygon',
+                coordinates: [polygonCoordinates]
+            };
+            const features = map.querySourceFeatures('uspts', {
+                sourceLayer: 'uspts', // Replace with the correct source layer name
+                filter: ['within', polygonGeoJSON]
+            });
+            const numFeatures = features.length;
+            console.log(`Number of points within bounding box: ${numFeatures}`);
+            if (numFeatures > 0) {
+                // Calculate the center of the bounding box
+                const centerLng = (polygonCoordinates[0][0] + polygonCoordinates[2][0]) / 2;
+                const centerLat = (polygonCoordinates[0][1] + polygonCoordinates[2][1]) / 2;
+                const middleCoordinates = [centerLng, centerLat];                
+                popup.setLngLat(middleCoordinates)
+                .setHTML(`Number of points within bounding box: ${numFeatures}`)
+                .addTo(map);
+            }
+        }
+        map.on('moveend', () => {
+            if (map.getLayer('bounding-box-layer')){
+                map.removeLayer('bounding-box-layer');
+            }
+            if (map.getSource('bounding-box')) {
+                map.removeSource('bounding-box');
+            }
+            updateBoundingBoxPolygon();
+        });
         </script>
     </body>
 </html>
