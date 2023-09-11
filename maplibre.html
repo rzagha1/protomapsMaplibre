@@ -130,24 +130,6 @@
             }
         });
 
-        map.addSource("counties", {
-                type: "vector",
-                tiles: [
-                "https://vectortileservices5.arcgis.com/x3kecEMtcyrJgEOz/arcgis/rest/services/counties_vt_test/VectorTileServer/tile/{z}/{y}/{x}.pbf"
-                ]
-        });
-            
-        map.addLayer({
-                id: "counties-fill",
-                type: "fill",
-                source: "counties",
-                "source-layer": "ne_10m_admin_0_countries_usa",
-                paint: {
-                "fill-color": "hsl(200, 80%, 50%)",
-                "fill-opacity": 0.5,
-                "fill-outline-color": "white"
-                }
-        });
         map.addSource('uspts', {
             type: 'vector',
             url: "pmtiles://" + PMTILES_URL
