@@ -6,6 +6,7 @@
     <link href="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.css" rel="stylesheet" />
     <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.css" type="text/css">
     <link rel='stylesheet' href='https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.0/mapbox-gl-draw.css' type='text/css' />
+    <link rel="stylesheet" href="conversion.css">
         
     <script src="https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.js"></script>
     <script src="https://unpkg.com/maplibre-gl-measures@latest/dist/maplibre-gl-measures.js"></script>
@@ -14,256 +15,334 @@
     <script src="https://unpkg.com/pmtiles@2.10.0-beta.0/dist/index.js"></script>
     <script src="https://unpkg.com/protomaps-themes-base@1.3.1/dist/index.js"></script>
 
-    <style>
-        body {
-            margin: 0;
-        }
-        #map {
-            height:100%; width:100%;
-        }
-        .toggle-btn {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            z-index: 2;
-        }
-        </style>
-    </head>
-    <body>
-    <div id="map"></div>
-    <button id="toggleBtn" class="toggle-btn">Toggle USPTS</button>
-    
-    <script>
-    let boundingBoxSource;
-    let protocol = new pmtiles.Protocol();
-    maplibregl.setRTLTextPlugin('https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.2.3/mapbox-gl-rtl-text.js');
-    maplibregl.addProtocol("pmtiles", protocol.tile);
+</head>  
 
-    let PMTILES_URL = "https://rzagha1.github.io/flask-map-vts/uspts.pmtiles";
-    const mapboxApiKey = "pk.eyJ1IjoicnphZ2hhMSIsImEiOiJjaXVwcDAwZHkwMjBpMnRwNHpmMWIzcTc3In0.iZVkJccpQ8WZp3YnvAKbIg"
 
-    const apiKey = "AAPKb201ea05136f4ff5ab0f9897beef6b1fgVc9q-anpZ_ccGLXop2ftUMVciX06tWquPwUEMGrBqtJW6QIyzRZDXC2dgXgZDNy";
-    const basemapEnum = "ArcGIS:LightGray";
-    const map = new maplibregl.Map({
-        container: "map", // the id of the div element
-        style: `https://basemaps-api.arcgis.com/arcgis/rest/services/styles/${basemapEnum}?type=style&token=${apiKey}`,
-        zoom: 4, // starting zoom
-        center: [-90,40.3], // starting location [longitude, latitude]
-        attributionControl: false,
-        hash: true
-    });
-    const baseUrl = "https://basemaps-api.arcgis.com/arcgis/rest/services/styles";
-    const url = (name) => `${baseUrl}/${name}?type=style&token=${apiKey}`;
+<body>             
+  <div id='map'> </div>  
+  <div id="basemaps-wrapper">
+    <select id="basemaps">
+      <option value="ArcGIS:LightGray">Light Gray</option>
+      <option value="ArcGIS:Streets">Streets</option>
+    </select>  
+  </div>
+  <script>
+  //////////////////////Layer Controls////////////////////
+  // Enumerate ids of the layers.
+  let boundingBoxSource;
+  let protocol = new pmtiles.Protocol();
+  maplibregl.setRTLTextPlugin('https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.2.3/mapbox-gl-rtl-text.js');
+  maplibregl.addProtocol("pmtiles", protocol.tile);
+  let mapboxApiKey = "pk.eyJ1IjoicnphZ2hhMSIsImEiOiJjaXVwcDAwZHkwMjBpMnRwNHpmMWIzcTc3In0.iZVkJccpQ8WZp3YnvAKbIg";
+  let geocodeMarker;
 
-    const setBasemap = (name) => {
-        map.setStyle(url(name));
-    };
-    setBasemap("ArcGIS:LightGray");
-    
-    let geocoder = new MapboxGeocoder({
-        accessToken: mapboxApiKey,
-        placeholder: 'Enter an address',
-        countries: 'us',
-        collapsed: true
-      });
-    map.addControl(
-        geocoder
-    );
-    geocoder.on('result', function(ev) {
-        coords = ev.result.geometry.coordinates;
-        if (geocodeMarker) {
-            geocodeMarker.remove();
-        }
-        geocodeMarker = new maplibregl.Marker({
-            color: "#FFFFFF",
-            draggable: true
-            }).setLngLat(coords)
-            .addTo(map);
-    });
-    map.addControl(new maplibregl.NavigationControl());      
+  let layer_fncs = {
+    'points': {
+          LYR: 'uspts',
+          URL: "pmtiles://https://storage.googleapis.com/sagagroupdata/uspts.pmtiles",
+          ID: 'points',
+          REF: 'uspts',
+          COLOR: 'black',
+          GEOM: 'Point',
+          MIN_ZOOM: 1,
+    },
+    'counties':{            
+        LYR: 'counties',
+        URL: "pmtiles://https://rzagha1.github.io/protomapshost/counties.pmtiles",
+        ID: 'counties',
+        REF: 'counties',
+        COLOR: 'purple',
+        GEOM: 'Polygon',
+        MIN_ZOOM: 1,
+    },
+    'BoundingBox':{
+        SOURCE: 'bb',
+        ID: 'BoundingBox',
+        COLOR: 'yellow'
+    }   
+  };
 
-    const layer ={
-            LYR: 'public.hexagons',
-            ID: 'hexagons',
-            REF: 'hex_source',
-            COLOR: 'orange',
-            GEOM: 'Polygon',
-            MIN_ZOOM: 1,
-            QUERY: '?step=4'
-        } 
+  const layerControl = document.createElement('div');
+  layerControl.id = 'layer-control';
+  // Create the layer control header
+  const layerHeader = document.createElement('h2');
+  layerHeader.textContent = 'Datasets';
+  layerControl.appendChild(layerHeader);
+  // Create the layer control items dynamically
+  for (const layer in layer_fncs) {
+    const layerItem = document.createElement('div');
+    layerItem.className = 'layer-item';
+    const layerCheckbox = document.createElement('input');
+    layerCheckbox.type = 'checkbox';
+    layerCheckbox.id = layer;
+    layerCheckbox.checked = true;
+    layerItem.appendChild(layerCheckbox);
+    const layerLabel = document.createElement('label');
+    layerLabel.htmlFor = layer;
+    layerLabel.textContent = layer.charAt(0).toUpperCase() + layer.slice(1);
+    layerItem.appendChild(layerLabel);
+    const sublayerContainer = document.createElement('div');
+    sublayerContainer.className = 'sublayer-container';
+    const sublayerItem = document.createElement('div');
+    sublayerItem.className = 'sublayer-item';
+    const sublayerLabel = document.createElement('label');        
+    const sublayerBox = document.createElement('div');
+    sublayerBox.className = 'box';
+    sublayerBox.style.backgroundColor = layer_fncs[layer].COLOR;
+    sublayerLabel.appendChild(sublayerBox);
+    sublayerItem.appendChild(sublayerLabel);
+    sublayerContainer.appendChild(sublayerItem);
+    layerItem.appendChild(sublayerContainer);
+    layerControl.appendChild(layerItem);
+  }                  
+////////////////Map iniatilization/////////////
+  const apiKey = "AAPK07c4048cb3bb48d2a98ee544297631b918Z5mh7gBlBL6owpfjx6YzXq2gnRQzTZhhFiahyfSYojOmvFgnbBV-aaZT9S3nCb";
+  const basemapEnum = "ArcGIS:LightGray";
+  const map = new maplibregl.Map({
+      container: "map", // the id of the div element
+      style: `https://basemaps-api.arcgis.com/arcgis/rest/services/styles/${basemapEnum}?type=style&token=${apiKey}`,
+      zoom: 3, // starting zoom
+      center: [-98,31], // starting location [longitude, latitude]
+      attributionControl: false,
+      hash: true,
+      pitch: 20
+  });
+  const baseUrl = "https://basemaps-api.arcgis.com/arcgis/rest/services/styles";
+  const url = (name) => `${baseUrl}/${name}?type=style&token=${apiKey}`;
+  const setBasemap = (name) => {
+      map.setStyle(url(name));
+  };
+  setBasemap("ArcGIS:LightGray");
   
-    map.on('load', () => {
-        const tilesUrl = layer.QUERY ? `http://164.90.213.82:7800/${layer.LYR}/{z}/{x}/{y}.pbf${layer.QUERY}` : `http://164.90.213.82:7800/${layer.LYR}/{z}/{x}/{y}.pbf`;
-        map.addSource(layer.REF, {
-            type: 'vector',
-            tiles: [tilesUrl],
-            minzoom: layer.MIN_ZOOM,
-            maxzoom: 22,
-            promoteId: 'id'
+let geocoder = new MapboxGeocoder({
+    accessToken: mapboxApiKey,
+    placeholder: 'Enter an address',
+    countries: 'us',
+    collapsed: false
+  });
+  map.addControl(
+    geocoder
+  );
+  geocoder.on('result', function(ev) {
+    coords = ev.result.geometry.coordinates;
+    if (geocodeMarker) {
+      geocodeMarker.remove();
+    }
+    geocodeMarker = new maplibregl.Marker({
+        color: "#FFFFFF",
+        draggable: true
+      }).setLngLat(coords)
+      .addTo(map);
+  });
+
+  map.addControl(new maplibregl.NavigationControl());
+  ////////////////////////Functions///////////////////////
+  function featureHtml(f) {
+      let h = "";
+      let p = f.properties;
+      for (let k in p) {
+        h += "<b>" + k + ":</b> " + p[k] + "<br/>";
+      }
+      return "<p>" + h + "</p>";
+  }      
+
+  function addPolygon(layer){
+    map.addSource(layer.REF, {
+          type: "vector",
+          url: layer.URL,
+          "promoteId": "id"
         });
         map.addLayer({
-            id: layer.ID + 'line',
-            source: layer.REF,
-            'source-layer': layer.LYR,
-            type: 'line',
-            paint: {
-            'line-color': layer.COLOR,
-            'line-width': 1
+            "id":layer.ID+'line' ,
+            "source": layer.REF,
+            "source-layer": layer.LYR,
+            'type': 'line',
+            'paint': {
+                'line-color': layer.COLOR,
+                'line-width': 1
             }
         });
         map.addLayer({
-            id: layer.ID,
-            source: layer.REF,
-            'source-layer': layer.LYR,
-            type: 'fill',
-            layout: {
-            visibility: 'visible'
+          "id":layer.ID,
+            "source": layer.REF,
+            "source-layer": layer.LYR,
+            "type": "fill",
+            'layout': {
+            'visibility': 'visible'
             },
-            paint: {
-            'fill-color': layer.COLOR,
+            'paint': {
+              'fill-color': layer.COLOR,
             'fill-opacity': [
-                'case',
-                ['boolean', ['feature-state', 'hover'], false],
-                1,
-                0.5
+              'case',
+              ['boolean', ['feature-state', 'hover'], false],
+              1,
+              0.5
             ]
             }
         });
+    }
 
-        map.addSource('uspts', {
-            type: 'vector',
-            url: "pmtiles://" + PMTILES_URL
-        });
-        map.addLayer({
-            'id': 'pts',
-            'source': 'uspts',
-            'source-layer': "uspts", // Replace with the source layer name
-            'type': 'circle', // Use 'circle' for point data
-            'paint': {
-                'circle-radius': [
-                        'interpolate',
-                        ['exponential',2],
-                        ['zoom'],
-                        0, .5,
-                        2,1,
-                        6,1.5,
-                        8,3, 
-                        12,4,
-                        18,6 
-                    ],
-                    'circle-stroke-width': [
-                        'interpolate',
-                        ['exponential',2],
-                        ['zoom'],
-                        12, 0, 
-                        14, 2
-                    ],
-                }
-            });         
-        });
-
-        const popup = new maplibregl.Popup({
-            closeButton: true,
-            closeOnClick: false,
-            maxWidth: "none",
-        });
-        map.on('click', 'pts', (e) => {            
-                const feature = e.features[0];
-                popup.setHTML(`<table style="font-size:12px">
-                        <tr><td>${feature.properties.prop}</td></tr></table>`);
-                popup.setLngLat(e.lngLat);
-                popup.addTo(map);
-        });        
-
-        map.on('click', 'hexagons', (e) => {
-                const feature = e.features[0];
-                popup.setHTML(`<table style="font-size:12px">
-                        <tr><td>${feature.properties.pts}</td></tr></table>`);
-                popup.setLngLat(e.lngLat);
-                popup.addTo(map);
-        });   
-
-        const toggleButton = document.getElementById('toggleBtn');
-        toggleButton.addEventListener('click', toggleUSPTS);
-
-        function toggleUSPTS() {
-            const layerId = 'pts';
-            const layer = map.getLayer(layerId);
-
-            if (layer) {
-                const visibility = map.getLayoutProperty(layerId, 'visibility');
-                if (visibility === 'visible') {
-                    map.setLayoutProperty(layerId, 'visibility', 'none');
-                } else {
-                    map.setLayoutProperty(layerId, 'visibility', 'visible');
-                }
+  function addPoints(layer){
+      map.addSource(layer.REF, {
+          type: "vector",
+          url: layer.URL
+      });
+      map.addLayer({
+          "id":layer.ID,
+          "type": "circle",
+          "source": layer.REF,
+          "source-layer": layer.LYR,
+          'paint': {
+            'circle-radius': [
+                    'interpolate',
+                    ['exponential',2],
+                    ['zoom'],
+                    0, 1,
+                    2,2,
+                    6,3,
+                    8,4, 
+                    12,4.5,
+                    18,6,
+                    20,8 
+                ],
+                'circle-stroke-width': [
+                    'interpolate',
+                    ['exponential',2],
+                    ['zoom'],
+                    12, 0, 
+                    14, 2
+                ],
             }
-        }
+      });
+  }
 
-        function updateBoundingBoxPolygon() {
-            const bounds = map.getBounds();
-            const polygonCoordinates = [
-                [bounds.getWest(), bounds.getNorth()],
-                [bounds.getEast(), bounds.getNorth()],
-                [bounds.getEast(), bounds.getSouth()],
-                [bounds.getWest(), bounds.getSouth()],
-                [bounds.getWest(), bounds.getNorth()] 
-            ];
-            const features = map.queryRenderedFeatures(polygonCoordinates, { layers: ['pts'] });
-            const numFeatures = features.length;
-            map.addSource('bounding-box', {
-                type: 'geojson',
-                data: {
-                type: 'Feature',
-                geometry: {
-                    type: 'Polygon',
-                    coordinates: [polygonCoordinates]
-                }
-                }
-            });
-            map.addLayer({
-                id: 'bounding-box-layer',
-                type: 'fill',
-                source: 'bounding-box',
-                paint: {
-                'fill-color': 'yellow',
-                "fill-opacity": 0.2,
-                'fill-outline-color': 'rgba(0, 0, 0, 0.5)'
-                }
-            });
-            queryPointsWithinBoundingBox(polygonCoordinates);
+  function addLayers(){
+    for (const key in layer_fncs) {
+        const layer = layer_fncs[key];
+        if (layer.GEOM==='Polygon'){
+          addPolygon(layer);
         }
+        else if (layer.GEOM === 'Point') {
+          addPoints(layer);
+        }           
+    }             
+  }
 
-        function queryPointsWithinBoundingBox(polygonCoordinates) {
-            const polygonGeoJSON = {
+  function updateBoundingBoxPolygon() {
+        const bounds = map.getBounds();
+        const polygonCoordinates = [
+            [bounds.getWest(), bounds.getNorth()],
+            [bounds.getEast(), bounds.getNorth()],
+            [bounds.getEast(), bounds.getSouth()],
+            [bounds.getWest(), bounds.getSouth()],
+            [bounds.getWest(), bounds.getNorth()] 
+        ];
+        map.addSource(layer_fncs['BoundingBox'].SOURCE, {
+            type: 'geojson',
+            data: {
+            type: 'Feature',
+            geometry: {
                 type: 'Polygon',
                 coordinates: [polygonCoordinates]
-            };
-            const features = map.querySourceFeatures('uspts', {
-                sourceLayer: 'uspts', // Replace with the correct source layer name
-                filter: ['within', polygonGeoJSON]
-            });
-            const numFeatures = features.length;
-            console.log(`Number of points within bounding box: ${numFeatures}`);
-            if (numFeatures > 0) {
-                // Calculate the center of the bounding box
-                const centerLng = (polygonCoordinates[0][0] + polygonCoordinates[2][0]) / 2;
-                const centerLat = (polygonCoordinates[0][1] + polygonCoordinates[2][1]) / 2;
-                const middleCoordinates = [centerLng, centerLat];                
-                popup.setLngLat(middleCoordinates)
-                .setHTML(`Number of points within bounding box: ${numFeatures}`)
-                .addTo(map);
             }
-        }
-        map.on('moveend', () => {
-            if (map.getLayer('bounding-box-layer')){
-                map.removeLayer('bounding-box-layer');
             }
-            if (map.getSource('bounding-box')) {
-                map.removeSource('bounding-box');
-            }
-            updateBoundingBoxPolygon();
         });
-        </script>
-    </body>
+        map.addLayer({
+            id: layer_fncs['BoundingBox'].ID,
+            type: 'fill',
+            source: layer_fncs['BoundingBox'].SOURCE,
+            paint: {
+            'fill-color': 'yellow',
+            "fill-opacity": 0.2,
+            'fill-outline-color': 'rgba(0, 0, 0, 0.5)'
+            }
+        });
+        queryPointsWithinBoundingBox(polygonCoordinates);
+    }
+
+    function queryPointsWithinBoundingBox(polygonCoordinates) {
+        const polygonGeoJSON = {
+            type: 'Polygon',
+            coordinates: [polygonCoordinates]
+        };
+        const features = map.querySourceFeatures(layer_fncs['points'].LYR, {
+            sourceLayer: layer_fncs['points'].LYR, // Replace with the correct source layer name
+            filter: ['within', polygonGeoJSON]
+        });
+        const numFeatures = features.length;
+        console.log(`Number of points within bounding box: ${numFeatures}`);
+        if (numFeatures > 0) {
+            // Calculate the center of the bounding box
+            const centerLng = (polygonCoordinates[0][0] + polygonCoordinates[2][0]) / 2;
+            const centerLat = (polygonCoordinates[0][1] + polygonCoordinates[2][1]) / 2;
+            const middleCoordinates = [centerLng, centerLat];                
+            popup.setLngLat(middleCoordinates)
+            .setHTML(`Number of points within bounding box: ${numFeatures}`)
+            .addTo(map);
+        }
+    }
+
+    map.on('idle', () => {
+        const layerControl = document.getElementById('layer-control');
+        
+        layerControl.addEventListener('change', (event) => {
+            const layerId = event.target.id;
+            const isVisible = event.target.checked ? 'visible' : 'none';
+
+            map.setLayoutProperty(layerId, 'visibility', isVisible);
+
+            if (layer_fncs[layerId]?.GEOM === 'Polygon') {
+            const lineLayerId = layerId + 'line';
+            map.setLayoutProperty(lineLayerId, 'visibility', isVisible);
+            }
+        });
+    });
+
+
+
+
+  map.on('load', () => {
+    addLayers();
+    document.getElementById('map').appendChild(layerControl);       
+  });     
+
+  const basemapsSelectElement = document.querySelector("#basemaps");
+    basemapsSelectElement.addEventListener("change", (e) => {
+      setBasemap(e.target.value);
+      map.on('idle', () => {
+        addLayers();
+      });
+    });
+    const popup = new maplibregl.Popup({
+        closeButton: true,
+        closeOnClick: false,
+        maxWidth: "none",
+    });
+
+    map.on('click', function(e) {
+        for (const layer in layer_fncs) {
+          let features = map.queryRenderedFeatures(e.point, { layers: [layer_fncs[layer].ID] });
+            geocodeMarker = new maplibregl.Popup({
+              color: "#FFFFFF",
+              draggable: true,
+              closeOnClick: true
+            }).setLngLat(e.lngLat).setHTML(featureHtml(features[0]))
+            .addTo(map);          
+        }
+      });
+
+
+    map.on('moveend', () => {
+        if (map.getLayer(layer_fncs['BoundingBox'].ID)){
+            map.removeLayer(layer_fncs['BoundingBox'].ID);
+        }
+        if (map.getSource(layer_fncs['BoundingBox'].SOURCE)) {
+            map.removeSource(layer_fncs['BoundingBox'].SOURCE);
+        }
+        updateBoundingBoxPolygon();
+    });
+
+   
+</script>
+</body>
 </html>
