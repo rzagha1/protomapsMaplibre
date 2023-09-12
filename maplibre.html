@@ -247,16 +247,19 @@ let geocoder = new MapboxGeocoder({
             }
             }
         });
+        /*
         map.addLayer({
             id: layer_fncs['BoundingBox'].ID,
             type: 'fill',
             source: layer_fncs['BoundingBox'].SOURCE,
             paint: {
             'fill-color': 'yellow',
-            "fill-opacity": 0.2,
+            "fill-opacity": 0.0,
             'fill-outline-color': 'rgba(0, 0, 0, 0.5)'
             }
         });
+        */
+        //map.setLayoutProperty(layer_fncs['BoundingBox'].ID, 'visibility', false);
         queryPointsWithinBoundingBox(polygonCoordinates);
     }
 
@@ -315,20 +318,23 @@ let geocoder = new MapboxGeocoder({
     });
     const popup = new maplibregl.Popup({
         closeButton: true,
-        closeOnClick: false,
+        closeOnClick: true,
         maxWidth: "none",
     });
 
     map.on('click', function(e) {
         for (const layer in layer_fncs) {
           let features = map.queryRenderedFeatures(e.point, { layers: [layer_fncs[layer].ID] });
+          if (features.length>0 ){
             geocodeMarker = new maplibregl.Popup({
               color: "#FFFFFF",
               draggable: true,
               closeOnClick: true
             }).setLngLat(e.lngLat).setHTML(featureHtml(features[0]))
-            .addTo(map);          
+            .addTo(map);         
+        } 
         }
+    
       });
 
 
