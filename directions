@@ -1,4 +1,7 @@
 1. Protomaps - https://github.com/protomaps/PMTiles || https://protomaps.com/
-2. Use ogr2ogr and tippecanoe 
-  ogr2ogr -f GeoJSON counties.geojson "https://services.arcgis.com/P3ePLMYs2RVChkJx/ArcGIS/rest/services/USA_Counties_Generalized_Boundaries/FeatureServer/0/query?where=1%3D1&f=json&outfields=*" -gt 10000 -progress -overwrite -skipfailure && tippecanoe -zg --projection=EPSG:4326 -o counties.pmtiles -l counties counties.geojson --include=NAME --force && rm counties.geojson
-3. Use maplibre gl js or leaflet to display 
+2. ogr2ogr - https://gdal.org/programs/ogr2ogr.html
+3. Tippecanoe - https://github.com/felt/tippecanoe
+4. Github pages (or any other s3 style bucket hosting) - https://pages.github.com/
+5. Maplibre gl js - https://maplibre.org/maplibre-gl-js/docs/
+
+ogr2ogr/tippecanoe command: ogr2ogr -f GeoJSON counties.geojson "https://services.arcgis.com/P3ePLMYs2RVChkJx/ArcGIS/rest/services/USA_Counties_Generalized_Boundaries/FeatureServer/0/query?where=1%3D1&f=json&outfields=*" -gt 10000 -progress -overwrite -skipfailure && tippecanoe -zg --projection=EPSG:4326 -o counties.pmtiles -l counties counties.geojson --include=NAME --force && rm counties.geojson
